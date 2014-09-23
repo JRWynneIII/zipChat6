@@ -4,69 +4,65 @@ import threading
 import socket
 import time
 
-def fetch_local_ipv6_address(port=10008):
-    # try to detect whether IPv6 is supported at the present system and
-    # fetch the IPv6 address of localhost.
-    if not socket.has_ipv6:
-        raise Exception("The local machine has no IPv6 support enabled")
+class zServer:
+    def __init__(self):
+        self.port=10008
+        if not socket.has_ipv6:
+            raise Exception("The local machine has no IPv6 support enabled")
+        addrs = socket.getaddrinfo("localhost", self.port, socket.AF_INET6, 0, socket.SOL_TCP)
  
-    addrs = socket.getaddrinfo("localhost", port, socket.AF_INET6, 0, socket.SOL_TCP)
+        if len(addrs) == 0:
+            raise Exception("there is no IPv6 address configured for localhost")
  
-    if len(addrs) == 0:
-        raise Exception("there is no IPv6 address configured for localhost")
- 
-    entry0 = addrs[0]
-    sockaddr = entry0[-1]
-    return sockaddr
- 
- 
-def ipv6_echo_server(sockaddr):
-    # Echo server program
- 
-    s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    s.bind(sockaddr)
-    s.listen(1)
-    print ("Server opened socket connection:", s, ", address: '%s'" % sockaddr[0])
-    conn, addr = s.accept()
- 
-    time.sleep(1)
-    print ('Server: Connected by', addr)
-    if True: # answer a single request
-        data = conn.recv(1024)
-        conn.send(data)
-    conn.close()
- 
- 
-def ipv6_echo_client(sockaddr):
-    # Echo client program
-    # use hostname or port number or use 'sockaddr' to open the connection
- 
-    #HOST = 'localhost'
-    #PORT = 10008              # The same port as used by the server
-    s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    #s.connect((HOST, PORT))
-    s.connect(sockaddr)
- 
-    print ("client opened socket connection:", s.getsockname())
-    data = 'Hello, world! -> via IPv6 :-)'
-    print ('Client is sending:', repr(data))
- 
-    s.send(data.encode())
-    data = s.recv(1024).decode()
-    s.close()
-    print ('Client received response:', repr(data))
+        entry0 = addrs[0]
+        self.fullAddr = entry0
+        self.sockaddr = entry0[-1]
+    
+    def getIP6Addr(self):
+        return self.sockaddr
+    
+    def Send(self,data):
+        try:
+            s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            s.bind(self.sockaddr)
+            s.listen(1) #The number refers to how many connections are kept "busy" until they're outright refused
+            c, addr = s.accept() #Found a connection! accept it
+            c.send(data)
+            c.close() #Close the connection
+        except Exception as e:
+            print("Error: ", e)
+        
+        
+
+class zClient:
+    def __init__(self, toAddress):
+        self.remote = toAddress
+        self.port = 10008
+        if not socket.has_ipv6:
+            raise Exception("The local machine has no IPv6 support enabled")
+
+    def listen(self):
+        try:
+            s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            s.connect(self.remote)
+            output = s.recv(4096)    #recv buffer is 4096. No idea if its bytes, kbytes or what. docs didn't specify
+            s.close()
+            return output
+        except Exception as e:
+            print("Error: ", e)
  
  
-try:
-    # fetch the local IPv6 address
-    local_ipv6_addr = fetch_local_ipv6_address()
-    t = threading.Thread(target=ipv6_echo_server, args=(local_ipv6_addr,))
-    t.start()
  
-    time.sleep(1)
-    ipv6_echo_client(local_ipv6_addr)
- 
-except Exception as e:
-    print ("Error occurred: ", e)
- 
-print ("bye.")
+#try:
+#    # fetch the local IPv6 address
+#    local_ipv6_addr = fetch_local_ipv6_address()
+#    t = threading.Thread(target=ipv6_echo_server, args=(local_ipv6_addr,))
+#    t.start()
+# 
+#    time.sleep(1)
+#    ipv6_echo_client(local_ipv6_addr)
+# 
+#except Exception as e:
+#    print ("Error occurred: ", e)
+# 
+#print ("bye.")
