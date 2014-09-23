@@ -50,19 +50,3 @@ class zClient:
             return output
         except Exception as e:
             print("Error: ", e)
- 
- 
- 
-#try:
-#    # fetch the local IPv6 address
-#    local_ipv6_addr = fetch_local_ipv6_address()
-#    t = threading.Thread(target=ipv6_echo_server, args=(local_ipv6_addr,))
-#    t.start()
-# 
-#    time.sleep(1)
-#    ipv6_echo_client(local_ipv6_addr)
-# 
-#except Exception as e:
-#    print ("Error occurred: ", e)
-# 
-#print ("bye.")
