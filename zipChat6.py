@@ -3,6 +3,7 @@
 import threading
 import socket
 import time
+import hashlib
 
 class zServer:
     def __init__(self):
@@ -21,6 +22,9 @@ class zServer:
     def getIP6Addr(self):
         return self.sockaddr
     
+    def getAddress(self):
+        return self.fullAddr
+
     def Send(self,data):
         try:
             s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
@@ -50,3 +54,73 @@ class zClient:
             return output
         except Exception as e:
             print("Error: ", e)
+
+
+class heartBeatServer:
+    def __init__(self):
+        self.port = 10008
+
+    #This is the only function that needs to be called
+    def start(self,port,ipList):
+        t = threading.Thread(target=toThread, args=(port,ipList))
+        t.daemon = True
+        t.start()
+
+    #All these methods need to be private but i don't know how
+    def toThread(self,port,ipList)
+        while 1:
+            serv = zServer()
+            data = build_heartbeat_packet()
+            broadcast(data,ipList)
+            time.sleep(10)
+
+    def build_heartbeat_packet(serv):
+        packet = []
+        packet[0] = serv.getAddress()
+        #Put more info for the packet here
+        packet[-1] = hashlib.sha224(packet).hexdigest()
+        return packet
+
+    def broadcast(self,data,iplist):
+        try:
+            s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            for ip in iplist:
+                s.listen(1)
+                connection, remoteAddress = s.accept()
+                if ip == remoteAddress:
+                    connection.send(data)
+                else:
+                    connection.send("") #SET HEARTBEAT CLIENT TO RETRY IF IT GETS EMPTY DATA PACKET
+
+        except Exception as e:
+            print("Error: ", e)
+            
+class heartBeatClient:
+    def __init__(self):
+        self.port = 10008
+    
+    #This is the only function that needs to be public/called
+    def start(self,port,ipList):
+        t = threading.Thread(target=clientThread,args=(port, ipList))
+        t.daemon = True
+        t.start()
+
+    #Again this function should be private buT I DONT 'KNOW HOW IN PYTHON
+    def clientThread(self,port,ipList):
+        while 1:
+            for ip in ipList:
+                successful = False
+                count = 0
+                while not successful:
+                    count += 1
+                    client = zClient(ip)
+                    output = client.listen()
+                    if output != "":
+                        successful = True
+                    else:
+                        successful = False
+                    #try to get a successful connection 100 times else timeout
+                    if count > 100:
+                        break
+            time.sleep(10)
+
