@@ -11,7 +11,7 @@ def main():
     commandMode()
 
 def commandMode():
-    cmd = input('>> ')
+    cmd = input(">> ")
     parseCmd(cmd)
     commandMode()
 
@@ -24,10 +24,10 @@ def parseCmd(cmd):
             method = possibles.get(item)()
 
 def populateCommands():
-    cmdList.append('connect')
-    cmdList.append('exit')
+    cmdList.append("connect")
+    cmdList.append("exit")
     cmdList.append("help")
-    cmdList.append('disconnect')
+    cmdList.append("disconnect")
 
 
 def help():
