@@ -5,10 +5,12 @@ import socket
 import time
 import hashlib
 import netifaces as ni
+import numpy
 
 class zServer:
-    def __init__(self,port=10008):
+    def __init__(self,port=10008,proto="UDP"):
         self.port = port
+        self.protocol = proto
         if not socket.has_ipv6:
             raise Exception("The local machine has no IPv6 support enabled")
         addrs = socket.getaddrinfo("localhost", self.port, socket.AF_INET6, 0, socket.SOL_TCP)
@@ -16,15 +18,17 @@ class zServer:
         if len(addrs) == 0:
             raise Exception("there is no IPv6 address configured for localhost")
  
-        entry0 = addrs[0]
-        self.fullAddr = entry0
-        self.sockaddr = entry0[-1]
+        me=ni.ifaddresses('tun0')[10][0]['addr']
+        addrs = socket.getaddrinfo("localhost", 10009, socket.AF_INET6, 0, socket.SOL_TCP)
+        tup = addrs[0]
+        tup = tup[-1]
+        tup = list(tup)
+        tup[0] = me
+        tup = tuple(tup)
+        self.addrTup = tup
 
     def getIP6Addr(self):
-        return self.sockaddr
-
-    def getAddress(self):
-        return self.fullAddr
+        return self.addrTup
 
     def Send(self,destination,port,data):
         try:
@@ -59,16 +63,30 @@ class heartbeatServer:
         if len(addrs) == 0:
             raise Exception("there is no IPv6 address configured for localhost")
     
+    def getAddr(self):
+        me=ni.ifaddresses('tun0')[10][0]['addr']
+        addrs = socket.getaddrinfo("localhost", 10009, socket.AF_INET6, 0, socket.SOL_TCP)
+        tup = addrs[0]
+        tup = tup[-1]
+        tup = list(tup)
+        tup[0] = me
+        tup = tuple(tup)
+        return tup
+
     def start(self,port,ipList):
         t = threading.Thread(target=self.beat, args=(port,ipList,))
         t.start()
 
-    def build_heartbeat_packet(serv):
-        packet = []
-        packet[0] = serv.getAddress()
-        #Put more info for the packet here
-        packet[-1] = hashlib.sha224(packet).hexdigest()
-        return packet
+    def build_heartbeat_packet(self,serv):
+        try:
+            packet = []
+            packet.append(serv.getIP6Addr())
+            tmp = list(packet[0])
+            packet[0] = tmp[0]
+            #Put more info for the packet here
+            return packet
+        except Exception as e:
+            print("Error: ", e);
 
     #CHANGE TO UDP
     def broadcast(self,data,iplist):
@@ -76,7 +94,8 @@ class heartbeatServer:
             print("Sending beat...")
             s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
             for ip in iplist:
-                s.sendto(data,ip)
+                packet = numpy.array(data)
+                s.sendto(packet.tostring(),ip)
 
         except Exception as e:
             print("Error: ", e)
@@ -84,9 +103,10 @@ class heartbeatServer:
     def beat(self,port,ipList):
         while True:
             serv = zServer()
-            dat = "1.2.3.4".encode()#self.build_heartbeat_packet(serv)
+            #dat = "1.2.3.4".encode()
+            dat = self.build_heartbeat_packet(serv)
             self.broadcast(dat,ipList)
-            time.sleep(120)         #Wait 2 minutes until next beat
+            time.sleep(5)         #Wait 2 minutes until next beat
 
 
 
@@ -101,12 +121,9 @@ class heartbeatClient:
         if len(addrs) == 0:
             raise Exception("there is no IPv6 address configured for localhost")
         
-        entry0 = addrs[0]
-        self.sockAddrs = entry0[-1]
-
     def getAddr(self):
         me=ni.ifaddresses('tun0')[10][0]['addr']
-        addrs = socket.getaddrinfo("localhost", 10009, socket.AF_INET6, 0, socket.SOL_TCP)
+        addrs = socket.getaddrinfo("localhost", self.port, socket.AF_INET6, 0, socket.SOL_TCP)
         tup = addrs[0]
         tup = tup[-1]
         tup = list(tup)

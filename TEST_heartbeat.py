@@ -15,9 +15,9 @@ def getAddr():
         tup = tuple(tup)
         return tup
 
-hbServ = zipChat6udp.heartbeatServer()
-hbClient = zipChat6udp.heartbeatClient()
-addressServ = zipChat6udp.zServer()
+hbServ = zipChat6.heartbeatServer()
+hbClient = zipChat6.heartbeatClient()
+addressServ = zipChat6.zServer()
 ipList = []
 ipList.append(getAddr())
 hbClient.start(10009)
