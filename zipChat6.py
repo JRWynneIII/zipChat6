@@ -38,8 +38,24 @@ class zServer:
     #Sends `data` to the specified port and address (destination); UDP
     def Send(self,destination,port,data):
         try:
-            s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-            s.sendto(data,destination)
+            if self.protocol == "TCP":
+                self.__sendTcp(destination,port,data)
+            elif self.protocol == "UDP":
+                s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                s.sendto(data,destination)
+            else:
+                raise Exception("Protocol not supported")
+        except Exception as e:
+            print("Error: ", e)
+
+    def __sendTcp(self, destination, port, data):
+        try:
+            s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            s.bind(self.getIP6Addr())
+            s.listen(1) #Listen for a connection
+            c, addr = s.accept()    #Accept the connection. returns its address and the connection object
+            c.send(data)        #Since we've handshake'd we can send the data
+            c.close()   #close it out when its done
         except Exception as e:
             print("Error: ", e)
 
@@ -48,20 +64,37 @@ class zServer:
 #   Defaults to UDP protocol
 #
 class zClient:
-    def __init__(self):
+    def __init__(self, proto="UDP"):
+        self.protocol = proto
         if not socket.has_ipv6:
             raise Exception("The local machine has no IPv6 support enabled")
     
     #UDP listener. 
     def listen(self,address,port):
         try:
-            s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-            s.bind(address)
-            while True:
-                data, recvFrom = s.recvfrom(1024)
-                return data, recvFrom
+            if self.protocol == "TCP":
+                return self.__listenTcp(address,port)
+            elif self.protocol == "UDP":
+                s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                s.bind(address)
+                while True:
+                    data, recvFrom = s.recvfrom(1024)
+                    return data, recvFrom
+            else:
+                raise Exception("Protocol not supported")
         except Exception as e:
             print("Error: ", e)
+    
+    def __listenTcp(self, address, port):
+        try:
+            s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            s.connect(address)
+            output = s.recv(4096)
+            s.close()
+            return output
+        except Exception as e:
+            print("Error: ", e)
+
 
 #
 #   Heartbeat Server will send out a "i'm alive/online" signal every 2 minutes. 
@@ -80,7 +113,7 @@ class heartbeatServer:
             raise Exception("there is no IPv6 address configured for localhost")
 
     #Gets the IPv6 address of the 'tun0' (CJDNS) device
-    def getAddr(self):
+    def __getAddr(self):
         me=ni.ifaddresses('tun0')[10][0]['addr']
         addrs = socket.getaddrinfo("localhost", 10009, socket.AF_INET6, 0, socket.SOL_TCP)
         tup = addrs[0]
@@ -92,7 +125,7 @@ class heartbeatServer:
 
     #Starts the heartbeat on a seperate thread. Will send out heartbeat packet to every IP in `ipList`
     def start(self,port,ipList):
-        t = threading.Thread(target=self.beat, args=(port,ipList,))
+        t = threading.Thread(target=self.__beat, args=(port,ipList,))
         t.start()
 
     #Builds the heartbeat packet to be sent
@@ -108,7 +141,7 @@ class heartbeatServer:
             print("Error: ", e);
 
     #Loops through `ipList` and sends out the built packet to each IP in the list
-    def broadcast(self,data,iplist):
+    def __broadcast(self,data,iplist):
         try:
             print("Sending beat...")
             s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -120,12 +153,12 @@ class heartbeatServer:
             print("Error: ", e)
 
     #Encapsulates the "beat". Initializes the zServer, builds the packet, broadcasts it, then waits 2 minutes until next iteration. 
-    def beat(self,port,ipList):
+    def __beat(self,port,ipList):
         while True:
             serv = zServer()
             #dat = "1.2.3.4".encode()
             dat = self.build_heartbeat_packet(serv)
-            self.broadcast(dat,ipList)
+            self.__broadcast(dat,ipList)
             time.sleep(5)         #Wait 2 minutes until next beat
 
 #
@@ -143,7 +176,7 @@ class heartbeatClient:
             raise Exception("there is no IPv6 address configured for localhost")
 
     #Gets the IPv6 address of the CJDNS device        
-    def getAddr(self):
+    def __getAddr(self):
         me=ni.ifaddresses('tun0')[10][0]['addr']
         addrs = socket.getaddrinfo("localhost", self.port, socket.AF_INET6, 0, socket.SOL_TCP)
         tup = addrs[0]
@@ -154,7 +187,7 @@ class heartbeatClient:
         return tup
     
     #Function that gets called when a "beat" is recieved
-    def updateHeartbeat(self, data, address):
+    def __updateHeartbeat(self, data, address):
         print("Heartbeat recieved from: ", address, data.decode())
 
     #Listens for the heartbeat
@@ -163,8 +196,8 @@ class heartbeatClient:
             while True:
                 print("Listening")
                 client = zClient()
-                output, addr = client.listen(self.getAddr(),10009)
-                self.updateHeartbeat(output, addr)
+                output, addr = client.listen(self.__getAddr(),10009)
+                self.__updateHeartbeat(output, addr)
         except Exception as e:
             print("Error: ", e)
 
