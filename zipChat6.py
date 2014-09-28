@@ -141,10 +141,9 @@ class heartbeatServer:
             print("Error: ", e);
 
     #Loops through `ipList` and sends out the built packet to each IP in the list
-    def __broadcast(self,data,iplist):
+    def __broadcast(self,data,iplist,s):
         try:
             print("Sending beat...")
-            s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
             for ip in iplist:
                 packet = numpy.array(data)
                 s.sendto(packet.tostring(),ip)
@@ -154,11 +153,11 @@ class heartbeatServer:
 
     #Encapsulates the "beat". Initializes the zServer, builds the packet, broadcasts it, then waits 2 minutes until next iteration. 
     def __beat(self,port,ipList):
+        s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         while True:
             serv = zServer()
-            #dat = "1.2.3.4".encode()
             dat = self.build_heartbeat_packet(serv)
-            self.__broadcast(dat,ipList)
+            self.__broadcast(dat,ipList,s)
             time.sleep(5)         #Wait 2 minutes until next beat
 
 #
@@ -196,7 +195,7 @@ class heartbeatClient:
             while True:
                 print("Listening")
                 client = zClient()
-                output, addr = client.listen(self.__getAddr(),10009)
+                output, addr = client.listen(('',port),port)
                 self.__updateHeartbeat(output, addr)
         except Exception as e:
             print("Error: ", e)
