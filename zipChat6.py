@@ -7,6 +7,34 @@ import hashlib
 import netifaces as ni
 import numpy
 import configparser
+import zipChat6
+
+class configData:
+    def __init__(self, confFile="zc.conf"):
+        self.confFile = confFile
+
+    def getInterface(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        return config['INTERFACE']['interface']
+
+    def getHeartbeatOutPort(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        return config['UDP']['heartbeat_out']
+
+    def getHeartbeatInPort(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        return config['UDP']['heartbeat_in']
+
+    def getKnownIPList(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        ipList = config['KNOWN_IP']['ips'].split(',')
+        return ipList
+
+configureData = zipChat6.configData()
 
 #
 #   Base server class. 
@@ -23,7 +51,7 @@ class zServer:
         if len(addrs) == 0:
             raise Exception("there is no IPv6 address configured for localhost")
  
-        me=ni.ifaddresses('tun0')[10][0]['addr']
+        me=ni.ifaddresses(configureData.getInterface())[10][0]['addr']
         addrs = socket.getaddrinfo("localhost", 10009, socket.AF_INET6, 0, socket.SOL_TCP)
         tup = addrs[0]
         tup = tup[-1]
@@ -105,7 +133,7 @@ class zClient:
 #
 class heartbeatServer:
     def __init__(self):
-        self.port = 10009
+        self.port = configureData.getHeartbeatOutPort()
         if not socket.has_ipv6:
             raise Exception("The local machine has no IPv6 support enabled")
         addrs = socket.getaddrinfo("localhost", self.port, socket.AF_INET6, 0, socket.SOL_TCP)
@@ -115,7 +143,7 @@ class heartbeatServer:
 
     #Gets the IPv6 address of the 'tun0' (CJDNS) device
     def __getAddr(self):
-        me=ni.ifaddresses('tun0')[10][0]['addr']
+        me=ni.ifaddresses(configureData.getInterface())[10][0]['addr']
         addrs = socket.getaddrinfo("localhost", 10009, socket.AF_INET6, 0, socket.SOL_TCP)
         tup = addrs[0]
         tup = tup[-1]
@@ -125,7 +153,8 @@ class heartbeatServer:
         return tup
 
     #Starts the heartbeat on a seperate thread. Will send out heartbeat packet to every IP in `ipList`
-    def start(self,port,ipList):
+    def start(self,ipList):
+        port = int(self.port)
         t = threading.Thread(target=self.__beat, args=(port,ipList,))
         t.start()
 
@@ -167,7 +196,7 @@ class heartbeatServer:
 #
 class heartbeatClient:
     def __init__(self):
-        self.port = 10009
+        self.port = configureData.getHeartbeatInPort()
         if not socket.has_ipv6:
             raise Exception("The local machine has no IPv6 support enabled")
         addrs = socket.getaddrinfo("localhost", self.port, socket.AF_INET6, 0, socket.SOL_TCP)
@@ -177,7 +206,7 @@ class heartbeatClient:
 
     #Gets the IPv6 address of the CJDNS device        
     def __getAddr(self):
-        me=ni.ifaddresses('tun0')[10][0]['addr']
+        me=ni.ifaddresses(configureData.getInterface())[10][0]['addr']
         addrs = socket.getaddrinfo("localhost", self.port, socket.AF_INET6, 0, socket.SOL_TCP)
         tup = addrs[0]
         tup = tup[-1]
@@ -202,31 +231,8 @@ class heartbeatClient:
             print("Error: ", e)
 
     #Starts the client on a seperate thread
-    def start(self,port):
+    def start(self):
+        port = int(self.port)
         t = threading.Thread(target=self.getBeat,args=(port,))
         t.start()
 
-class configData:
-    def __init__(self, confFile="zc.conf"):
-        self.confFile = confFile
-
-    def getInterface(self):
-        config = configparser.ConfigParser()
-        config.read(self.confFile)
-        return config['INTERFACE']['interface']
-
-    def getHeartbeatOutPort(self):
-        config = configparser.ConfigParser()
-        config.read(self.confFile)
-        return config['UDP']['heartbeat_out']
-
-    def getHeartbeatInPort(self):
-        config = configparser.ConfigParser()
-        config.read(self.confFile)
-        return config['UDP']['heartbeat_in']
-
-    def getKnownIPList(self):
-        config = configparser.ConfigParser()
-        config.read(self.confFile)
-        ipList = config['KNOWN_IP']['ips'].split(',')
-        return ipList
