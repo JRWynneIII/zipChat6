@@ -6,6 +6,7 @@ import time
 import hashlib
 import netifaces as ni
 import numpy
+import configparser
 
 #
 #   Base server class. 
@@ -205,3 +206,27 @@ class heartbeatClient:
         t = threading.Thread(target=self.getBeat,args=(port,))
         t.start()
 
+class configData:
+    def __init__(self, confFile="zc.conf"):
+        self.confFile = confFile
+
+    def getInterface(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        return config['INTERFACE']['interface']
+
+    def getHeartbeatOutPort(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        return config['UDP']['heartbeat_out']
+
+    def getHeartbeatInPort(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        return config['UDP']['heartbeat_in']
+
+    def getKnownIPList(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        ipList = config['KNOWN_IP']['ips'].split(',')
+        return ipList
