@@ -9,6 +9,9 @@ import numpy
 import configparser
 import zipChat6
 
+#
+#   Class's methods to return data from zc.conf
+#   
 class configData:
     def __init__(self, confFile="zc.conf"):
         self.confFile = confFile
@@ -34,6 +37,33 @@ class configData:
         ipList = config['KNOWN_IP']['ips'].split(',')
         return ipList
 
+    def getIPFromName(self,name):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        return config['NAME_IP'][name]
+
+    def getNameFromIP(self,IP):
+        try:
+            config = configparser.ConfigParser()
+            config.read(self.confFile)
+            nameList = config['NAME_IP']
+            for name in nameList:
+                if nameList[name] == IP:
+                    return name
+            raise Exception("IP not found!")
+        except Exception as e:
+            print("Error: ", e)
+
+    def getConnectionOut(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        return config['TCP']['connection_out']
+
+    def getConnectionIn(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        return config['TCP']['connection_in']
+        
 configureData = zipChat6.configData()
 
 #
@@ -52,7 +82,7 @@ class zServer:
             raise Exception("there is no IPv6 address configured for localhost")
  
         me=ni.ifaddresses(configureData.getInterface())[10][0]['addr']
-        addrs = socket.getaddrinfo("localhost", 10009, socket.AF_INET6, 0, socket.SOL_TCP)
+        addrs = socket.getaddrinfo("localhost", port, socket.AF_INET6, 0, socket.SOL_TCP)
         tup = addrs[0]
         tup = tup[-1]
         tup = list(tup)
@@ -217,7 +247,12 @@ class heartbeatClient:
     
     #Function that gets called when a "beat" is recieved
     def __updateHeartbeat(self, data, address):
-        print("Heartbeat recieved from: ", address, data.decode())
+        addressList = list(address)
+        addr = addressList[0]
+        sender = configureData.getNameFromIP(addr)
+        if sender == None:
+            sender == address
+        print("Heartbeat recieved from: ", sender)
 
     #Listens for the heartbeat
     def getBeat(self, port):
@@ -236,3 +271,25 @@ class heartbeatClient:
         t = threading.Thread(target=self.getBeat,args=(port,))
         t.start()
 
+class ConnectionListener:
+    def __init__(self):
+        self.port = configureData.getConnectionIn()
+        self.client = zClient()
+
+    def start(self):
+        port = int(self.port)
+        t = threading.Thread(target=self.__listen,args=(port,))
+        t.start()
+
+    def __launchConnection(self,data,address):
+        print(data.decode()," from ", address)
+
+    def __listen(self,port):
+        data, address = self.client.listen(('',port),port)
+        self.__launchConnection(data, address)
+
+class Connection:
+    def __init__(self,name):
+        self.name = name
+        self.server = zServer(configureData.getConnectionOut(),"TCP")
+        
