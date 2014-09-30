@@ -271,6 +271,10 @@ class heartbeatClient:
         t = threading.Thread(target=self.getBeat,args=(port,))
         t.start()
 
+#
+#   Start the ConnectionListener when the heartbeat server/client is started. This
+#   Listens for incoming connections (I.E. Conversations)
+#
 class ConnectionListener:
     def __init__(self):
         self.port = configureData.getConnectionIn()
@@ -282,14 +286,35 @@ class ConnectionListener:
         t.start()
 
     def __launchConnection(self,data,address):
-        print(data.decode()," from ", address)
+        data = data.decode()
+        data = data.split(' ')
+        name = data[1]
+        if data[0] == "CR":
+            print(data," from ", address)
+            #Do TCP stuff. Start TCP listener and server
+
+
 
     def __listen(self,port):
-        data, address = self.client.listen(('',port),port)
-        self.__launchConnection(data, address)
+        try:
+            while True:
+                data, address = self.client.listen(('',port),port)
+                self.__launchConnection(data, address)
+        except Exception as e:
+            print("Error: ", e)
 
+#
+#   This is what initiates and carries on the connection/converstaion
+#
 class Connection:
     def __init__(self,name):
         self.name = name
-        self.server = zServer(configureData.getConnectionOut(),"TCP")
+        self.UDPserver = zServer(configureData.getConnectionOut())
+        #self.TCPserver = zServer(configureData.getConnectionOut(),"TCP")
+        self.outPort = configureData.getConnectionOut()
+        self.inPort = configureData.getConnectionIn()
         
+    def connect(self, isResponse=False):
+        ipToConnectTo = configureData.getIPFromName(self.name)
+        self.UDPserver.Send((ipToConnectTo,int(self.inPort)),int(self.inPort), ("CR "+self.name).encode())
+        #Do TCP stuff. 
