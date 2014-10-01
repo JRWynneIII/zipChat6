@@ -387,3 +387,21 @@ class Connection:
         # UDPout  |==============>| UDPin 
         # UDPin   |<==============| UDPout
         #
+
+
+
+
+        #   
+        #   To establist a connection with a peer:
+        #
+        #   UDP:out |[CR (port)] ===========>| UDP:in
+        #   UDP:in  |<===========[ACK (port)]| UDP:out
+        #           |                        | 
+        #           | Once recieve port numb-|
+        #           | ers are exchanged,     |
+        #           | Connection moves to TCP|
+        #           | and to ports > 20001   |
+        #           |                        |
+        #   TCP:out |=======================>| TCP:in
+        #   TCP:in  |<=======================| TCP:out
+        #
