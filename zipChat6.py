@@ -63,6 +63,13 @@ class configData:
         config = configparser.ConfigParser()
         config.read(self.confFile)
         return config['TCP']['connection_in']
+
+    def getConnectionPortRange(self):
+        config = configparser.ConfigParser()
+        config.read(self.confFile)
+        low = config['GP_PORTS']['low'] 
+        high = config['GP_PORTS']['high'] 
+        return low, high
         
 configureData = zipChat6.configData()
 
@@ -105,7 +112,7 @@ class zServer:
             else:
                 raise Exception("Protocol not supported")
         except Exception as e:
-            print("Error: ", e)
+            print("ServerSendError: ", e)
 
     def __sendTcp(self, destination, port, data):
         try:
@@ -116,7 +123,7 @@ class zServer:
             c.send(data)        #Since we've handshake'd we can send the data
             c.close()   #close it out when its done
         except Exception as e:
-            print("Error: ", e)
+            print("TCPSendError: ", e)
 
 #
 #   Base client class
@@ -142,7 +149,7 @@ class zClient:
             else:
                 raise Exception("Protocol not supported")
         except Exception as e:
-            print("Error: ", e)
+            print("ClientListenError: ", e)
     
     def __listenTcp(self, address, port):
         try:
@@ -152,7 +159,7 @@ class zClient:
             s.close()
             return output
         except Exception as e:
-            print("Error: ", e)
+            print("TCPClientListenError: ", e)
 
 
 #
@@ -198,7 +205,7 @@ class heartbeatServer:
             #Put more info for the packet here
             return packet
         except Exception as e:
-            print("Error: ", e);
+            print("HeartbeatPacketBuilderError: ", e);
 
     #Loops through `ipList` and sends out the built packet to each IP in the list
     def __broadcast(self,data,iplist,s):
@@ -209,7 +216,7 @@ class heartbeatServer:
                 s.sendto(packet.tostring(),ip)
 
         except Exception as e:
-            print("Error: ", e)
+            print("HeartbeatBroadcastError: ", e)
 
     #Encapsulates the "beat". Initializes the zServer, builds the packet, broadcasts it, then waits 2 minutes until next iteration. 
     def __beat(self,port,ipList):
@@ -263,7 +270,7 @@ class heartbeatClient:
                 output, addr = client.listen(('',port),port)
                 self.__updateHeartbeat(output, addr)
         except Exception as e:
-            print("Error: ", e)
+            print("HeartbeatListenError: ", e)
 
     #Starts the client on a seperate thread
     def start(self):
@@ -279,11 +286,31 @@ class ConnectionListener:
     def __init__(self):
         self.port = configureData.getConnectionIn()
         self.client = zClient()
+        self.UDPserver = zServer(configureData.getConnectionOut())
+        self.outPort = configureData.getConnectionOut()
+        self.inPort = configureData.getConnectionIn()
+        self.lowPort, self.highPort = configureData.getConnectionPortRange()
+        self.usedPorts = []
+        self.usedPorts.append(self.outPort)
+        self.usedPorts.append(self.inPort)
+        self.usedPorts.append(self.lowPort)
 
     def start(self):
         port = int(self.port)
         t = threading.Thread(target=self.__listen,args=(port,))
         t.start()
+
+    def getFreePort(self):
+        try:
+            lastPort = int(self.usedPorts[-1])
+            if (lastPort + 1) > int(self.highPort):
+                raise Exception("No Availible Ports!")
+                return None
+            else:
+                self.usedPorts.append((lastPort + 1))
+                return self.usedPorts[-1]
+        except Exception as e:
+            print("ConnectionPortError: ", e)
 
     def __launchConnection(self,data,address):
         data = data.decode()
@@ -291,6 +318,11 @@ class ConnectionListener:
         name = data[1]
         if data[0] == "CR":
             print(data," from ", address)
+            addrlist = list(address)
+            addr = addrlist[0]
+            print(addr)
+            time.sleep(0.2)
+            self.UDPserver.Send((addr,int(self.outPort)),int(self.outPort), ("ACK "+ str(self.getFreePort())).encode())
             #Do TCP stuff. Start TCP listener and server
 
 
@@ -301,7 +333,7 @@ class ConnectionListener:
                 data, address = self.client.listen(('',port),port)
                 self.__launchConnection(data, address)
         except Exception as e:
-            print("Error: ", e)
+            print("ConnectionListenerError: ", e)
 
 #
 #   This is what initiates and carries on the connection/converstaion
@@ -310,11 +342,48 @@ class Connection:
     def __init__(self,name):
         self.name = name
         self.UDPserver = zServer(configureData.getConnectionOut())
-        #self.TCPserver = zServer(configureData.getConnectionOut(),"TCP")
-        self.outPort = configureData.getConnectionOut()
-        self.inPort = configureData.getConnectionIn()
+        self.UDPclient = zClient()
+        self.TCPserver = zServer(configureData.getConnectionOut(),"TCP")
+        self.TCPclient = zClient("TCP")
+        self.outPort = int(configureData.getConnectionOut())
+        self.inPort = int(configureData.getConnectionIn())
+        self.lowPort, self.highPort = configureData.getConnectionPortRange()
+        self.usedPorts = []
+        self.usedPorts.append(self.outPort)
+        self.usedPorts.append(self.inPort)
+        self.usedPorts.append(self.lowPort)
+
+    def getFreePort(self):
+        try:
+            lastPort = int(self.usedPorts[-1])
+            if (lastPort + 1) > int(self.highPort):
+                raise Exception("No Availible Ports!")
+                return None
+            else:
+                self.usedPorts.append((lastPort + 1))
+                return self.usedPorts[-1]
+        except Exception as e:
+            print("ConnectionPortError: ", e)
+
+        
         
     def connect(self, isResponse=False):
         ipToConnectTo = configureData.getIPFromName(self.name)
-        self.UDPserver.Send((ipToConnectTo,int(self.inPort)),int(self.inPort), ("CR "+self.name).encode())
-        #Do TCP stuff. 
+        self.UDPserver.Send((ipToConnectTo,int(self.inPort)),int(self.inPort), ("CR "+ str(self.getFreePort())).encode())
+        data, address = self.UDPclient.listen(('',self.outPort),self.outPort)   #Wait for ack from connectionListener. ConnectionListener will send free port
+        data = data.decode()
+        data = data.split(' ')
+        print(data, "From", address)
+
+        #
+        #   TODO:   NOW THAT ACK AND CR IS SOMEWHAT IMPLEMENTED, YOU NEED TO TAKE A BREAK FROM THIS AND MAKE SURE ALL PORTS ARE LINED
+        #   UP CORRECTLY. 
+        #   
+        #
+        #   Peer1                   Peer2
+        #
+        # out     |==============>| in
+        # in      |<==============| out
+        # UDPout  |==============>| UDPin 
+        # UDPin   |<==============| UDPout
+        #
