@@ -78,8 +78,8 @@ configureData = zipChat6.configData()
 #   Defaults to the UDP protocol and port 10008 unless otherwise specified
 #
 class zServer:
-    def __init__(self,port=10008,proto="UDP"):
-        self.port = port
+    def __init__(self,proto="UDP"):
+        self.port = configureData.getConnectionOut()
         self.protocol = proto
         if not socket.has_ipv6:
             raise Exception("The local machine has no IPv6 support enabled")
@@ -89,7 +89,7 @@ class zServer:
             raise Exception("there is no IPv6 address configured for localhost")
  
         me=ni.ifaddresses(configureData.getInterface())[10][0]['addr']
-        addrs = socket.getaddrinfo("localhost", port, socket.AF_INET6, 0, socket.SOL_TCP)
+        addrs = socket.getaddrinfo("localhost", self.port, socket.AF_INET6, 0, socket.SOL_TCP)
         tup = addrs[0]
         tup = tup[-1]
         tup = list(tup)
@@ -102,7 +102,15 @@ class zServer:
         return self.addrTup
 
     #Sends `data` to the specified port and address (destination); UDP
-    def Send(self,destination,port,data):
+    def Send(self,destination,data,port=None):
+        if port == None:
+            port = self.port
+        #Check for different port than the config file
+        if port != self.port:
+            destination = list(destination)
+            destination[1] = port
+            destination = tuple(destination)
+
         try:
             if self.protocol == "TCP":
                 self.__sendTcp(destination,port,data)
@@ -132,11 +140,29 @@ class zServer:
 class zClient:
     def __init__(self, proto="UDP"):
         self.protocol = proto
+        self.port = configureData.getConnectionIn()
         if not socket.has_ipv6:
             raise Exception("The local machine has no IPv6 support enabled")
+        me=ni.ifaddresses(configureData.getInterface())[10][0]['addr']
+        addrs = socket.getaddrinfo("localhost", self.port, socket.AF_INET6, 0, socket.SOL_TCP)
+        tup = addrs[0]
+        tup = tup[-1]
+        tup = list(tup)
+        tup[0] = me
+        tup = tuple(tup)
+        self.addr = tup
     
     #UDP listener. 
-    def listen(self,address,port):
+    def listen(self,address=None,port = None):
+        if port == None:
+            port = self.port
+        if address == None:
+            address = self.addr
+        if port != self.port:
+            address = list(address)
+            address[1] = port
+            address = tuple(address)
+
         try:
             if self.protocol == "TCP":
                 return self.__listenTcp(address,port)
@@ -286,7 +312,7 @@ class ConnectionListener:
     def __init__(self):
         self.port = configureData.getConnectionIn()
         self.client = zClient()
-        self.UDPserver = zServer(configureData.getConnectionOut())
+        self.UDPserver = zServer()
         self.outPort = configureData.getConnectionOut()
         self.inPort = configureData.getConnectionIn()
         self.lowPort, self.highPort = configureData.getConnectionPortRange()
@@ -322,7 +348,8 @@ class ConnectionListener:
             addr = addrlist[0]
             print(addr)
             time.sleep(0.2)
-            self.UDPserver.Send((addr,int(self.outPort)),int(self.outPort), ("ACK "+ str(self.getFreePort())).encode())
+            self.UDPserver.Send((addr,int(self.outPort)),("ACK " + str(self.getFreePort())).encode())
+            #self.UDPserver.Send((addr,int(self.outPort)),int(self.outPort), ("ACK "+ str(self.getFreePort())).encode())
             #Do TCP stuff. Start TCP listener and server
 
 
@@ -330,7 +357,7 @@ class ConnectionListener:
     def __listen(self,port):
         try:
             while True:
-                data, address = self.client.listen(('',port),port)
+                data, address = self.client.listen(port = port)
                 self.__launchConnection(data, address)
         except Exception as e:
             print("ConnectionListenerError: ", e)
@@ -341,9 +368,9 @@ class ConnectionListener:
 class Connection:
     def __init__(self,name):
         self.name = name
-        self.UDPserver = zServer(configureData.getConnectionOut())
+        self.UDPserver = zServer()
         self.UDPclient = zClient()
-        self.TCPserver = zServer(configureData.getConnectionOut(),"TCP")
+        self.TCPserver = zServer("TCP")
         self.TCPclient = zClient("TCP")
         self.outPort = int(configureData.getConnectionOut())
         self.inPort = int(configureData.getConnectionIn())
@@ -369,8 +396,9 @@ class Connection:
         
     def connect(self, isResponse=False):
         ipToConnectTo = configureData.getIPFromName(self.name)
-        self.UDPserver.Send((ipToConnectTo,int(self.inPort)),int(self.inPort), ("CR "+ str(self.getFreePort())).encode())
-        data, address = self.UDPclient.listen(('',self.outPort),self.outPort)   #Wait for ack from connectionListener. ConnectionListener will send free port
+        #self.UDPserver.Send((ipToConnectTo,int(self.inPort)),int(self.inPort), ("CR "+ str(self.getFreePort())).encode())
+        self.UDPserver.Send((ipToConnectTo,int(self.inPort)), ("CR " + str(self.getFreePort())).encode())
+        data, address = self.UDPclient.listen(port = self.outPort)   #Wait for ack from connectionListener. ConnectionListener will send free port
         data = data.decode()
         data = data.split(' ')
         print(data, "From", address)
